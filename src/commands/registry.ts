@@ -134,11 +134,23 @@ export async function handleCommandInteraction(
       .setFooter({ text: 'B4 Redeemer • Staff Review Dashboard' })
       .setTimestamp();
 
-    await applicationChannel.send({
-      embeds: [reviewDashboard],
-      components: [new ActionRowBuilder<ButtonBuilder>().addComponents(acceptButton, denyButton)],
-      allowedMentions: { parse: [] },
-    });
+    try {
+      const botMember = interaction.guild.members.me;
+      const permissions = applicationChannel.permissionsFor(botMember!);
+      if (!permissions?.has(PermissionFlagsBits.SendMessages) || !permissions.has(PermissionFlagsBits.EmbedLinks)) {
+        await interaction.reply({ content: 'I need Send Messages and Embed Links permissions in the configured beta application channel.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+      await applicationChannel.send({
+        embeds: [reviewDashboard],
+        components: [new ActionRowBuilder<ButtonBuilder>().addComponents(acceptButton, denyButton)],
+        allowedMentions: { parse: [] },
+      });
+    } catch (sendError) {
+      console.error('[Beta application] Could not send to the configured inbox:', sendError);
+      await interaction.reply({ content: 'I could not submit your application. Please tell a server administrator to check my permissions in the configured beta application channel.', flags: MessageFlags.Ephemeral });
+      return;
+    }
 
     await interaction.reply({
       content: 'Your B4 Redeemer beta tester application has been submitted. Staff will review it.',
