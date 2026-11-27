@@ -1,4 +1,4 @@
-import { Guild } from 'discord.js';
+import { Guild, PermissionFlagsBits } from 'discord.js';
 import { GuildConfigStore } from './guildConfig.js';
 import { sellauth } from './sellauth.js';
 import { claimOrder, releaseOrderClaim } from './orderClaims.js';
@@ -71,7 +71,7 @@ export class RoleManager {
 
       try {
         const botMember = guild.members.me;
-        if (!botMember?.permissions.has('ManageRoles')) throw new Error('I need Manage Roles permission to assign the BUYER role.');
+        if (!botMember?.permissions.has(PermissionFlagsBits.ManageRoles)) throw new Error('I need Manage Roles permission to assign the BUYER role.');
         if (buyerRole.position >= botMember.roles.highest.position) throw new Error('The BUYER role must be below my highest role in Server Settings → Roles.');
         if (!member.roles.cache.has(buyerRole.id)) {
           await member.roles.add(buyerRole, 'Verified completed SellAuth order');
@@ -93,7 +93,7 @@ export class RoleManager {
       if (Number.isFinite(total) && total >= 100 && serverConfig.vipBuyerRoleId) {
         try {
           const vipRole = await guild.roles.fetch(serverConfig.vipBuyerRoleId).catch(() => null);
-          if (vipRole && guild.members.me?.permissions.has('ManageRoles') && vipRole.position < guild.members.me.roles.highest.position) {
+          if (vipRole && guild.members.me?.permissions.has(PermissionFlagsBits.ManageRoles) && vipRole.position < guild.members.me.roles.highest.position) {
             await member.roles.add(vipRole, 'Customer purchase qualifies for VIP');
           }
         } catch (vipError) {
@@ -104,6 +104,10 @@ export class RoleManager {
       return { success: true, roleName: buyerRole.name, order };
     } catch (error) {
       console.error('[SellAuth order verification failed]', error);
+      const detail = error instanceof Error ? error.message : '';
+      if (detail.includes('Manage Roles') || detail.includes('must be below my highest role')) {
+        return { success: false, message: detail };
+      }
       return {
         success: false,
         message: 'SellAuth verification is temporarily unavailable. Please try again later or contact staff.',
