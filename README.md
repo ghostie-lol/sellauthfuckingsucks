@@ -1,55 +1,101 @@
 # SellAuth Discord Bot & Web Command Suite
 
-A production-ready Discord Bot powered by **Discord.js v14** and **TypeScript**, engineered specifically to manage and automate your **SellAuth** storefront.
+A Discord.js v14 and TypeScript bot for managing a SellAuth storefront across multiple Discord servers.
 
-## ✨ Core Features
-- 👑 **Attribution**: Bot made by @PremiumNPC
-- 🚀 **100+ Working Slash Commands**: Products, inventory, pricing, keys, HWID resets, customer lookup, revenue stats, fraud prevention, and more.
-- 📜 **Automated PDF Invoices**: Automatically generates and attaches an official branded PDF receipt with tax calculations, transaction hashes, and delivered keys.
-- 🎭 **Automated Customer Role Distribution**: Automatically verifies purchases, evaluates spend tiers, and dispenses Discord roles (@Verified Customer, @VIP, @Whale).
-- 🚨 **Real-Time Stock Alerts**: Monitors inventory levels with custom warning thresholds and mentions staff roles when stock is depleted.
-- 📊 **Discord Transaction Logging**: Formatted Discord embeds for completed sales, refunds, disputes, and restocks.
+## Features
 
-## 🛠️ Quick Start Guide
+- SellAuth product, inventory, order, customer, coupon, invoice, and license-key commands
+- Purchase verification and per-server buyer/VIP role assignment
+- Support tickets and ticket transcripts
+- Per-server beta application inboxes
+- Stock alerts and transaction logging in every configured server
+- Server-specific Swear Farm channel and leaderboard
+- AI replies inside bot-created support tickets
 
-### 1. Installation
-```bash
-git clone https://github.com/your-username/sellauth-discord-bot.git
-cd sellauth-discord-bot
-npm install
-```
+## Environment variables
 
-### 2. Configuration
+Keep service credentials and database configuration in Railway or your hosting provider:
 
-Only secrets and service-level settings belong in environment variables:
-
+Required:
 - `DISCORD_BOT_TOKEN`
 - `DISCORD_CLIENT_ID`
-- `SELLAUTH_API_KEY` and `SELLAUTH_SHOP_ID`
-- `DATABASE_URL` for persistent per-server settings, license redemption, and order claims
-- Optional AI settings: `OPENAI_API_KEY` / `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`
+- `SELLAUTH_API_KEY`
+- `SELLAUTH_SHOP_ID`
+- `DATABASE_URL`
 
-Do not add Discord guild, channel, category, or role IDs to the environment. Those are configured separately inside each server and saved in PostgreSQL.
+Optional:
+- `PGSSL=true` when your PostgreSQL provider requires SSL
+- `OPENAI_API_KEY` or `AI_API_KEY`
+- `AI_BASE_URL`
+- `AI_MODEL`
 
-### 3. Configure each Discord server
+The previous single-server ID variables are still supported for a one-time legacy import into the server named by `DISCORD_GUILD_ID`. These values are not used as global defaults and are not required for new servers:
+- `DISCORD_GUILD_ID`
+- `TICKET_CATEGORY_ID`
+- `TICKET_SUPPORT_ROLE_ID`
+- `TICKET_LOG_CHANNEL_ID`
+- `BETA_APPLICATION_CHANNEL_ID`
+- `CHANNEL_TRANSACTIONS_LOG`
+- `CHANNEL_STOCK_ALERTS`
+- `CHANNEL_DISPUTES_LOG`
+- `ROLE_VERIFIED_CUSTOMER`
+- `ROLE_VIP_BUYER`
+- `ROLE_STOCK_ALERT_PING`
 
-Invite the bot with the required application commands and bot permissions. In each server, an administrator runs:
+New servers are configured independently in PostgreSQL. Do not put server-specific IDs into shared environment variables.
 
-- `/server-config channel` to select transaction logs, stock alerts, dispute logs, ticket category, ticket logs, beta applications, or Swear Farm channel.
-- `/server-config role` to select the support, BUYER, VIP buyer, or stock-alert role.
-- `/dashboard` posts the beta application panel and automatically uses that channel as the application's destination.
-- `/ticket-panel` posts the ticket creation panel in the channel where it is run.
-- `/redeem-panel` posts the buyer redemption panel in the channel where it is run.
+## Invite the bot
 
-Settings are isolated by Discord server and persist across restarts.
+Use the Discord OAuth2 URL format below. Replace `YOUR_CLIENT_ID` with the application's client ID from the Discord Developer Portal:
 
-### 4. Deploy Slash Commands
-Deploy all 100+ slash commands to your server:
+```text
+https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=268553232&scope=bot%20applications.commands
+```
+
+The permission value includes View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Manage Channels (for tickets), and Manage Roles (for buyer/VIP role assignment). Place the bot's highest role above the buyer and VIP roles it must assign.
+
+## Configure each server
+
+After inviting the bot, a server administrator runs `/setup`. Supply whichever options apply to that server:
+
+- `ticket_category`, `support_role`, and `ticket_logs`
+- `beta_applications`
+- `transactions_log`, `stock_alerts`, and `disputes_log`
+- `buyer_role`, `vip_role`, and `stock_alert_role`
+- `swear_farm_channel`
+
+Only options supplied in a command are changed. Run `/setup` with no options to view the saved configuration. Each server has its own settings, and they persist across restarts.
+
+Then use `/ticket-panel`, `/redeem-panel`, or `/dashboard` in the channel where each panel should appear. The beta application destination is the channel selected in `/setup`.
+
+## Gateway intents
+
+The bot requests:
+- `Guilds`
+- `GuildMessages`
+- `MessageContent`
+
+Message Content is required for the existing ticket AI feature to read support-ticket messages. Enable the Message Content privileged intent in the Discord Developer Portal. The bot no longer requests the privileged Guild Members intent; it fetches individual members when role assignment is needed.
+
+## Deploy and run
+
+Install dependencies and build:
+
+```bash
+npm install
+npm run build
+```
+
+Register global application commands:
+
 ```bash
 npm run deploy:commands
 ```
 
-### 5. Run the Bot
+Global command updates can take some time to appear in every server.
+
+Start the bot:
+
 ```bash
-npm run dev
+npm start
 ```
