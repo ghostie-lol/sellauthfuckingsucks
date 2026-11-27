@@ -236,6 +236,7 @@ export async function handleCommandInteraction(
       await interaction.reply({ content: 'This is not a recognized ticket channel.', flags: MessageFlags.Ephemeral });
       return;
     }
+    const serverConfig = await GuildConfigStore.get(guild.id);
     const ownerId = channel.topic.slice('ticket-owner:'.length);
     const isOwner = interaction.user.id === ownerId;
     const isAdmin = Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
