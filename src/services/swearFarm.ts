@@ -1,5 +1,5 @@
 import { Client, TextChannel } from 'discord.js';
-import { Pool } from 'pg';
+import { Pool } from 'pg';\nimport { getGuildSettings } from './guildSettings.js';
 
 const TARGET_CHANNEL_ID = '1562401796394061874';
 const TICK_INTERVAL_MS = 30_000;
@@ -19,7 +19,7 @@ type FarmState = {
   goal: string | number;
   total_tf: string | number;
   operator_id: string | null;
-  goal_announced: boolean;
+  goal_announced: boolean;\n  channel_id: string | null;
 };
 
 let initPromise: Promise<void> | null = null;
@@ -69,10 +69,10 @@ async function ensureGuild(guildId: string): Promise<void> {
 export class SwearFarm {
   static startBackgroundWatcher(client: Client): void {
     setInterval(() => { void this.tick(client); }, TICK_INTERVAL_MS);
-    console.log('[SwearFarm] Background watcher started; messages are restricted to the configured channel.');
+    console.log('[SwearFarm] Background watcher started; each server uses its selected channel.');
   }
 
-  static async start(guildId: string, userId: string): Promise<FarmState> {
+  static async start(guildId: string, userId: string, channelId: string): Promise<FarmState> {
     await ensureGuild(guildId);
     const result = await pool!.query(
       `UPDATE b4_swear_farm_state
@@ -145,9 +145,9 @@ export class SwearFarm {
         try {
           const guild = await client.guilds.fetch(row.guild_id).catch(() => null);
           if (!guild) continue;
-          const channel = await guild.channels.fetch(TARGET_CHANNEL_ID).catch(() => null);
+          const settings = await getGuildSettings(row.guild_id);\n          const targetChannelId = row.channel_id || settings.swear_farm_channel_id;\n          if (!targetChannelId) continue;\n          const channel = await guild.channels.fetch(targetChannelId).catch(() => null);
           if (!channel || !channel.isTextBased() || !('send' in channel)) {
-            console.error(`[SwearFarm] Required channel ${TARGET_CHANNEL_ID} is missing or not text-based.`);
+            console.error(`[SwearFarm] Required channel ${targetChannelId} is missing or not text-based.`);
             continue;
           }
 
