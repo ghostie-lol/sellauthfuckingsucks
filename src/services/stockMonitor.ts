@@ -1,9 +1,9 @@
 import { Client, TextChannel, EmbedBuilder } from 'discord.js';
-import { config } from '../config.js';
+import { getGuildSettings } from './guildSettings.js';
 import { sellauth } from './sellauth.js';
 
 export class StockMonitor {
-  private static alertCooldowns = new Set<number>();
+  private static alertCooldowns = new Set<string>();
 
   static startBackgroundWatcher(client: Client) {
     setInterval(() => {
@@ -54,7 +54,7 @@ export class StockMonitor {
         return;
       }
 
-      for (const product of products) {
+      for (const guild of client.guilds.cache.values()) {\n        const settings = await getGuildSettings(guild.id);\n        if (!settings.stock_alerts_channel_id) continue;\n        const channel = await guild.channels.fetch(settings.stock_alerts_channel_id).catch(() => null);\n        if (!channel || !channel.isTextBased() || !('send' in channel)) continue;\n\n      for (const product of products) {
         const stock = Number(product?.stock);
         if (!product || product.id == null || !Number.isFinite(stock)) {
           console.warn('[StockMonitor] Skipping product with missing ID or invalid stock data.');
@@ -77,11 +77,11 @@ export class StockMonitor {
             )
             .setTimestamp();
 
-          const ping = config.roles.stockAlertPing ? `<@&${config.roles.stockAlertPing}> ` : '';
+          const ping = settings.stock_alert_role_id ? `<@&${settings.stock_alert_role_id}> ` : '';
           await channel.send({ content: ping, embeds: [embed] });
         } else if (stock > threshold) {
           // Clear cooldown if product was restocked
-          this.alertCooldowns.delete(Number(product.id));
+          this.alertCooldowns.delete(cooldownKey);
         }
       }
     } catch (err) {
