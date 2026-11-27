@@ -1,7 +1,24 @@
-import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { config } from './config.js';
 
 const commands = [
+
+  new SlashCommandBuilder()
+    .setName('setup')
+    .setDescription('Configure B4 Redeemer for this server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addChannelOption(option => option.setName('ticket_category').setDescription('Category for new support tickets').addChannelTypes(ChannelType.GuildCategory))
+    .addRoleOption(option => option.setName('support_role').setDescription('Support staff role'))
+    .addChannelOption(option => option.setName('ticket_logs').setDescription('Ticket close log channel').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+    .addChannelOption(option => option.setName('beta_applications').setDescription('Private beta application inbox').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+    .addChannelOption(option => option.setName('transactions_log').setDescription('SellAuth purchase log channel').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+    .addChannelOption(option => option.setName('stock_alerts').setDescription('Stock alert channel').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+    .addChannelOption(option => option.setName('disputes_log').setDescription('Payment dispute log channel').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement))
+    .addRoleOption(option => option.setName('buyer_role').setDescription('Customer role assigned after verification'))
+    .addRoleOption(option => option.setName('vip_role').setDescription('Optional VIP buyer role'))
+    .addRoleOption(option => option.setName('stock_alert_role').setDescription('Optional role pinged for low stock'))
+    .addChannelOption(option => option.setName('swear_farm_channel').setDescription('Channel used by the Swear Farm feature').addChannelTypes(ChannelType.GuildText)),
+
   new SlashCommandBuilder()
     .setName('advertisement')
     .setDescription('Open the B4 product advertisement dashboard')
@@ -408,35 +425,16 @@ const commands = [
 ];
 
 export async function registerCommands(): Promise<void> {
-  if (!config.discord.token) {
-    throw new Error(
-      'DISCORD_BOT_TOKEN is missing from environment variables.'
-    );
+  if (!config.discord.token || !config.discord.clientId) {
+    throw new Error('DISCORD_BOT_TOKEN and DISCORD_CLIENT_ID are required in environment variables.');
   }
 
-  if (!config.discord.clientId || !config.discord.guildId) {
-    throw new Error(
-      'DISCORD_CLIENT_ID and DISCORD_GUILD_ID must be configured.'
-    );
-  }
+  const rest = new REST({ version: '10', timeout: 120_000, retries: 3 }).setToken(config.discord.token);
 
-  const rest = new REST({ version: '10', timeout: 120_000, retries: 3 }).setToken(
-    config.discord.token
-  );
-
-  console.log(
-    `Registering ${commands.length} root SellAuth slash commands...`
-  );
-
+  console.log(`Registering ${commands.length} global SellAuth slash commands...`);
   await rest.put(
-    Routes.applicationGuildCommands(
-      config.discord.clientId,
-      config.discord.guildId
-    ),
-    {
-      body: commands.map(command => command.toJSON()),
-    }
+    Routes.applicationCommands(config.discord.clientId),
+    { body: commands.map(command => command.toJSON()) },
   );
-
-  console.log('Successfully registered slash commands.');
+  console.log('Successfully registered global slash commands.');
 }
