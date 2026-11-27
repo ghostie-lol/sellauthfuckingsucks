@@ -1,7 +1,6 @@
 import { Client, TextChannel } from 'discord.js';
 import { Pool } from 'pg';
 
-const TARGET_CHANNEL_ID = '1562401796394061874';
 const TICK_INTERVAL_MS = 30_000;
 const connectionString = process.env.DATABASE_URL;
 
@@ -14,6 +13,7 @@ const pool = connectionString
 
 type FarmState = {
   guild_id: string;
+  target_channel_id: string | null;
   active: boolean;
   repeat_count: number;
   goal: string | number;
@@ -32,6 +32,7 @@ async function ensureTables(): Promise<void> {
     initPromise = pool.query(`
       CREATE TABLE IF NOT EXISTS b4_swear_farm_state (
         guild_id TEXT PRIMARY KEY,
+        target_channel_id TEXT,
         active BOOLEAN NOT NULL DEFAULT FALSE,
         repeat_count INTEGER NOT NULL DEFAULT 80 CHECK (repeat_count BETWEEN 1 AND 500),
         goal BIGINT NOT NULL DEFAULT 500 CHECK (goal > 0),
@@ -41,6 +42,7 @@ async function ensureTables(): Promise<void> {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `).then(async () => {
+      await pool!.query('ALTER TABLE b4_swear_farm_state ADD COLUMN IF NOT EXISTS target_channel_id TEXT');
       await pool!.query(`
         CREATE TABLE IF NOT EXISTS b4_swear_farm_leaderboard (
           guild_id TEXT NOT NULL,
@@ -72,14 +74,14 @@ export class SwearFarm {
     console.log('[SwearFarm] Background watcher started; messages are restricted to the configured channel.');
   }
 
-  static async start(guildId: string, userId: string): Promise<FarmState> {
+  static async start(guildId: string, channelId: string, userId: string): Promise<FarmState> {
     await ensureGuild(guildId);
     const result = await pool!.query(
       `UPDATE b4_swear_farm_state
-       SET active = TRUE, operator_id = $2, updated_at = NOW()
+       SET active = TRUE, target_channel_id = $2, operator_id = $3, updated_at = NOW()
        WHERE guild_id = $1
        RETURNING *`,
-      [guildId, userId],
+      [guildId, channelId, userId],
     );
     return result.rows[0] as FarmState;
   }
@@ -145,9 +147,13 @@ export class SwearFarm {
         try {
           const guild = await client.guilds.fetch(row.guild_id).catch(() => null);
           if (!guild) continue;
-          const channel = await guild.channels.fetch(TARGET_CHANNEL_ID).catch(() => null);
+          if (!row.target_channel_id) {
+            console.error(`[SwearFarm] No channel is configured for guild ${row.guild_id}; stop and restart the farm after /setup.`);
+            continue;
+          }
+          const channel = await guild.channels.fetch(row.target_channel_id).catch(() => null);
           if (!channel || !channel.isTextBased() || !('send' in channel)) {
-            console.error(`[SwearFarm] Required channel ${TARGET_CHANNEL_ID} is missing or not text-based.`);
+            console.error(`[SwearFarm] Configured channel ${row.target_channel_id} is missing or not text-based in guild ${row.guild_id}.`);
             continue;
           }
 
