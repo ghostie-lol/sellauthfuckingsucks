@@ -1,7 +1,46 @@
-import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { config } from './config.js';
 
-const commands = [
+const commands = [\n
+  new SlashCommandBuilder()
+    .setName('server-config')
+    .setDescription('Configure this server without environment variables')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('channel')
+        .setDescription('Set a channel used by a bot feature')
+        .addStringOption(option =>
+          option.setName('feature').setDescription('Which feature should use this channel').setRequired(true)
+            .addChoices(
+              { name: 'Transaction logs', value: 'transactions_log_channel_id' },
+              { name: 'Stock alerts', value: 'stock_alerts_channel_id' },
+              { name: 'Dispute logs', value: 'disputes_log_channel_id' },
+              { name: 'Ticket category', value: 'ticket_category_id' },
+              { name: 'Ticket logs', value: 'ticket_log_channel_id' },
+              { name: 'Beta applications', value: 'beta_applications_channel_id' },
+              { name: 'Swear Farm', value: 'swear_farm_channel_id' },
+            ))
+        .addChannelOption(option =>
+          option.setName('channel').setDescription('Channel to use').setRequired(true)
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildCategory))
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('role')
+        .setDescription('Set a role used by a bot feature')
+        .addStringOption(option =>
+          option.setName('feature').setDescription('Which feature should use this role').setRequired(true)
+            .addChoices(
+              { name: 'Ticket support', value: 'ticket_support_role_id' },
+              { name: 'Buyer', value: 'buyer_role_id' },
+              { name: 'VIP buyer', value: 'vip_role_id' },
+              { name: 'Stock alert ping', value: 'stock_alert_role_id' },
+            ))
+        .addRoleOption(option =>
+          option.setName('role').setDescription('Role to use').setRequired(true))
+    ),
+
   new SlashCommandBuilder()
     .setName('advertisement')
     .setDescription('Open the B4 product advertisement dashboard')
@@ -409,34 +448,20 @@ const commands = [
 
 export async function registerCommands(): Promise<void> {
   if (!config.discord.token) {
-    throw new Error(
-      'DISCORD_BOT_TOKEN is missing from environment variables.'
-    );
+    throw new Error('DISCORD_BOT_TOKEN is missing from environment variables.');
   }
-
-  if (!config.discord.clientId || !config.discord.guildId) {
-    throw new Error(
-      'DISCORD_CLIENT_ID and DISCORD_GUILD_ID must be configured.'
-    );
+  if (!config.discord.clientId) {
+    throw new Error('DISCORD_CLIENT_ID is missing from environment variables.');
   }
 
   const rest = new REST({ version: '10', timeout: 120_000, retries: 3 }).setToken(
     config.discord.token
   );
 
-  console.log(
-    `Registering ${commands.length} root SellAuth slash commands...`
-  );
-
+  console.log(`Registering ${commands.length} global SellAuth slash commands...`);
   await rest.put(
-    Routes.applicationGuildCommands(
-      config.discord.clientId,
-      config.discord.guildId
-    ),
-    {
-      body: commands.map(command => command.toJSON()),
-    }
+    Routes.applicationCommands(config.discord.clientId),
+    { body: commands.map(command => command.toJSON()) },
   );
-
-  console.log('Successfully registered slash commands.');
+  console.log('Successfully registered global slash commands.');
 }
