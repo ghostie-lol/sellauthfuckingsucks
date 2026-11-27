@@ -3,6 +3,7 @@ import {
   GatewayIntentBits,
   Partials,
   Interaction,
+  MessageFlags,
 } from 'discord.js';
 
 import { config } from './config.js';
@@ -80,7 +81,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   } catch (error) {
     console.error('❌ Interaction handler error:', error);
     if (interaction.isRepliable()) {
-      const payload = { content: '❌ Something went wrong while handling that interaction. Check the bot permissions and server setup, then try again.', flags: 64 };
+      const payload = { content: '❌ Something went wrong while handling that interaction. Check the bot permissions and server setup, then try again.', flags: MessageFlags.Ephemeral };
       if (interaction.deferred || interaction.replied) {
         await interaction.followUp(payload).catch(() => undefined);
       } else {
