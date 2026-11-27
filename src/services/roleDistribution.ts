@@ -1,5 +1,5 @@
 import { Guild } from 'discord.js';
-import { config } from '../config.js';
+import { GuildConfigStore } from './guildConfig.js';
 import { sellauth } from './sellauth.js';
 import { claimOrder, releaseOrderClaim } from './orderClaims.js';
 
@@ -49,14 +49,13 @@ export class RoleManager {
         return { success: false, message: 'The order ID and purchase email do not match. Check both and try again.' };
       }
 
-      let buyerRole = guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
-      if (!buyerRole && config.roles.verifiedCustomer) {
-        const configuredRole = await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null);
-        if (configuredRole?.name.toUpperCase() === 'BUYER') buyerRole = configuredRole;
-      }
+      const serverConfig = await GuildConfigStore.get(guild.id);
+      let buyerRole = serverConfig.verifiedCustomerRoleId
+        ? await guild.roles.fetch(serverConfig.verifiedCustomerRoleId).catch(() => null)
+        : guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
 
       if (!buyerRole) {
-        console.error('[SellAuth verification] A role named BUYER is missing. Create/rename the role to BUYER and set ROLE_VERIFIED_CUSTOMER to its role ID if needed.');
+        console.error('[SellAuth verification] The BUYER role is not configured for this server.');
         return { success: false, message: 'The BUYER role is not configured. Please contact a server administrator.' };
       }
 
@@ -71,6 +70,9 @@ export class RoleManager {
       }
 
       try {
+        const botMember = guild.members.me;
+        if (!botMember?.permissions.has('ManageRoles')) throw new Error('I need Manage Roles permission to assign the BUYER role.');
+        if (buyerRole.position >= botMember.roles.highest.position) throw new Error('The BUYER role must be below my highest role in Server Settings → Roles.');
         if (!member.roles.cache.has(buyerRole.id)) {
           await member.roles.add(buyerRole, 'Verified completed SellAuth order');
         }
@@ -88,9 +90,12 @@ export class RoleManager {
         order.total ??
         (Number(order.totals?.total_cents ?? order.totals?.total_usd_cents ?? 0) / 100)
       );
-      if (Number.isFinite(total) && total >= 100 && config.roles.vipBuyer) {
+      if (Number.isFinite(total) && total >= 100 && serverConfig.vipBuyerRoleId) {
         try {
-          await member.roles.add(config.roles.vipBuyer, 'Customer purchase qualifies for VIP');
+          const vipRole = await guild.roles.fetch(serverConfig.vipBuyerRoleId).catch(() => null);
+          if (vipRole && guild.members.me?.permissions.has('ManageRoles') && vipRole.position < guild.members.me.roles.highest.position) {
+            await member.roles.add(vipRole, 'Customer purchase qualifies for VIP');
+          }
         } catch (vipError) {
           console.error('[SellAuth verification] BUYER was assigned, but VIP role assignment failed:', vipError);
         }
@@ -109,13 +114,11 @@ export class RoleManager {
   static async revokeCustomerRole(guild: Guild, discordUserId: string) {
     try {
       const member = await guild.members.fetch(discordUserId);
-      const buyerRole = guild.roles.cache.find(item => item.name.toUpperCase() === 'BUYER') ?? null;
-      if (member && buyerRole) {
-        await member.roles.remove(buyerRole);
-      } else if (member && config.roles.verifiedCustomer) {
-        const configuredRole = await guild.roles.fetch(config.roles.verifiedCustomer).catch(() => null);
-        if (configuredRole) await member.roles.remove(configuredRole);
-      }
+      const serverConfig = await GuildConfigStore.get(guild.id);
+      const buyerRole = serverConfig.verifiedCustomerRoleId
+        ? await guild.roles.fetch(serverConfig.verifiedCustomerRoleId).catch(() => null)
+        : guild.roles.cache.find(item => item.name.toUpperCase() === 'BUYER') ?? null;
+      if (member && buyerRole) await member.roles.remove(buyerRole);
     } catch (error) {
       console.error('[RoleManager Revoke Error]', error);
     }
