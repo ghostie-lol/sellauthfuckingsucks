@@ -249,6 +249,10 @@ export async function handleCommandInteraction(
       return;
     }
     const serverConfig = await GuildConfigStore.get(guild.id);
+    if (!guild.members.me?.permissions.has(PermissionFlagsBits.ManageChannels)) {
+      await interaction.reply({ content: 'I need Manage Channels permission to close and remove support tickets.', flags: MessageFlags.Ephemeral });
+      return;
+    }
     const ownerId = channel.topic.slice('ticket-owner:'.length);
     const isOwner = interaction.user.id === ownerId;
     const isAdmin = Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
@@ -261,7 +265,7 @@ export async function handleCommandInteraction(
     if (serverConfig.ticketLogChannelId) {
       const logChannel = await guild.channels.fetch(serverConfig.ticketLogChannelId).catch(() => null);
       if (logChannel && logChannel.isTextBased() && 'send' in logChannel) {
-        await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`);
+        await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`).catch(error => console.error('[Ticket] Could not write ticket log:', error));
       }
     }
     setTimeout(() => { void channel.delete('Ticket closed').catch(console.error); }, 5000);
