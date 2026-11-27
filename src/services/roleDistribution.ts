@@ -1,5 +1,5 @@
 import { Guild } from 'discord.js';
-import { config } from '../config.js';
+import { getGuildSettings } from './guildSettings.js';
 import { sellauth } from './sellauth.js';
 import { claimOrder, releaseOrderClaim } from './orderClaims.js';
 
@@ -56,7 +56,7 @@ export class RoleManager {
       }
 
       if (!buyerRole) {
-        console.error('[SellAuth verification] A role named BUYER is missing. Create/rename the role to BUYER and set ROLE_VERIFIED_CUSTOMER to its role ID if needed.');
+        console.error('[SellAuth verification] A role named BUYER is missing. Create it or configure one with /server-config role.');
         return { success: false, message: 'The BUYER role is not configured. Please contact a server administrator.' };
       }
 
