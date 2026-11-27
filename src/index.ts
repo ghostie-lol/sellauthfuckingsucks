@@ -41,8 +41,11 @@ client.user?.setPresence({
     `🤖 [SellAuth Bot] Logged in as ${client.user?.tag}`
   );
 
-  console.log(`🌐 Connected to ${client.guilds.cache.size} server(s).`);
-client.user?.setActivity('redeeming keys in b4 mods', {
+  console.log(
+    `📊 Connected to Guild: ${config.discord.guildId}`
+  );
+
+  client.user?.setActivity('redeeming keys in b4 mods', {
     type: 0,
   });
 
