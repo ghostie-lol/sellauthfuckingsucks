@@ -865,7 +865,7 @@ export async function handleCommandInteraction(
         const settings = await getGuildSettings(interaction.guild.id);
         const buyerRole = settings.buyer_role_id
           ? await interaction.guild.roles.fetch(settings.buyer_role_id).catch(() => null)
-          : interaction.guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
+          : interaction.guild.roles.cache.find((role: any) => role.name.toUpperCase() === 'BUYER') ?? null;
         if (!buyerRole) {
           await interaction.reply({ ...privateReply, content: 'No BUYER role found. Create a role named BUYER or configure it with /server-config role.' });
           return;
