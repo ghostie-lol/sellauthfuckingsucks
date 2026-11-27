@@ -69,12 +69,15 @@ export class StockMonitor {
               { name: 'Safety Threshold', value: threshold + ' units', inline: true },
             )
             .setTimestamp();
-          const ping = serverConfig.stockAlertRoleId ? '<@&' + serverConfig.stockAlertRoleId + '> ' : '';
+          const stockPingRole = serverConfig.stockAlertRoleId
+            ? await guild.roles.fetch(serverConfig.stockAlertRoleId).catch(() => null)
+            : null;
+          const ping = stockPingRole ? '<@&' + stockPingRole.id + '> ' : '';
           try {
             await channel.send({
               content: ping,
               embeds: [embed],
-              allowedMentions: { roles: serverConfig.stockAlertRoleId ? [serverConfig.stockAlertRoleId] : [] },
+              allowedMentions: { roles: stockPingRole ? [stockPingRole.id] : [] },
             });
             this.alertCooldowns.add(cooldownKey);
           } catch (sendError) {
