@@ -4,7 +4,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 
-import { config } from '../config.js';
+import { getGuildSettings } from './guildSettings.js';
 import { InvoiceGenerator } from './pdfInvoice.js';
 
 export class DiscordLogger {
