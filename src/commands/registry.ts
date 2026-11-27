@@ -208,6 +208,13 @@ export async function handleCommandInteraction(
       await interaction.reply({ content: 'I need Manage Channels, View Channel, and Send Messages permissions to create tickets.', flags: MessageFlags.Ephemeral });
       return;
     }
+    if (serverConfig.ticketCategoryId) {
+      const category = await guild.channels.fetch(serverConfig.ticketCategoryId).catch(() => null);
+      if (!category || category.type !== ChannelType.GuildCategory) {
+        await interaction.reply({ content: 'The configured ticket category no longer exists. Ask an administrator to update /setup ticket_category.', flags: MessageFlags.Ephemeral });
+        return;
+      }
+    }
     const overwrites: any[] = [
       { id: guild.roles.everyone.id, deny: ['ViewChannel'] },
       { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles', 'EmbedLinks'] },
