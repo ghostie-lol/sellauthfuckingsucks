@@ -6,6 +6,8 @@ export const config = {
   discord: {
     token: process.env.DISCORD_BOT_TOKEN || '',
     clientId: process.env.DISCORD_CLIENT_ID || '',
+    // Optional legacy-only source for importing the previous single-server setup.
+    // New server configuration is stored per guild in PostgreSQL.
     guildId: process.env.DISCORD_GUILD_ID || '',
   },
 
@@ -22,6 +24,8 @@ export const config = {
     model: process.env.AI_MODEL || 'gpt-4o-mini',
   },
 
+  // Legacy environment IDs are retained for the one-time import into DISCORD_GUILD_ID.
+  // Runtime command handlers use GuildConfigStore instead.
   tickets: {
     categoryId: process.env.TICKET_CATEGORY_ID || '',
     supportRoleId: process.env.TICKET_SUPPORT_ROLE_ID || '',
