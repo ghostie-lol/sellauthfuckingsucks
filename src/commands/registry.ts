@@ -17,6 +17,7 @@ import {
 import { sellauth } from '../services/sellauth.js';
 import { RoleManager } from '../services/roleDistribution.js';
 import { InvoiceGenerator } from '../services/pdfInvoice.js';
+import { config } from '../config.js';
 import { getGuildSettings, setGuildSetting } from '../services/guildSettings.js';
 import { randomBytes } from 'node:crypto';
 import { LicenseStore } from '../services/licenseStore.js';
