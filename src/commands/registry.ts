@@ -272,7 +272,7 @@ export async function handleCommandInteraction(
     if (serverConfig.ticketLogChannelId) {
       const logChannel = await guild.channels.fetch(serverConfig.ticketLogChannelId).catch(() => null);
       if (logChannel && logChannel.isTextBased() && 'send' in logChannel) {
-        await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`).catch(error => console.error('[Ticket] Could not write ticket log:', error));
+        await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`).catch((error: unknown) => console.error('[Ticket] Could not write ticket log:', error));
       }
     }
     setTimeout(() => { void channel.delete('Ticket closed').catch(console.error); }, 5000);
@@ -927,7 +927,7 @@ export async function handleCommandInteraction(
         const serverConfig = await GuildConfigStore.get(interaction.guild.id);
         const buyerRole = serverConfig.verifiedCustomerRoleId
           ? await interaction.guild.roles.fetch(serverConfig.verifiedCustomerRoleId).catch(() => null)
-          : interaction.guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
+          : interaction.guild.roles.cache.find((role: any) => role.name.toUpperCase() === 'BUYER') ?? null;
         if (!buyerRole) {
           await interaction.reply({ ...privateReply, content: '❌ The BUYER role is not configured. Ask an administrator to run /setup and select buyer_role, or create a role named BUYER.' });
           return;
