@@ -646,6 +646,10 @@ export async function handleCommandInteraction(
       }
 
       case 'dashboard': {
+        if (!interaction.guild) {
+          await interaction.reply({ content: 'The beta dashboard can only be posted inside a server.', flags: MessageFlags.Ephemeral });
+          return;
+        }
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({
             content: 'Only administrators can post the beta tester dashboard.',
