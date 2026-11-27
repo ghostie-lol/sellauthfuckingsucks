@@ -521,7 +521,7 @@ export async function handleCommandInteraction(
             `Stock alert role: ${show(saved.stockAlertRoleId, 'role')}`,
             `Swear Farm channel: ${show(saved.swearFarmChannelId, 'channel')}`,
             'Only the options you provide are changed. Run /setup without options to view saved settings.',
-          ].join('\\n'),
+          ].join('\n'),
           flags: MessageFlags.Ephemeral,
         });
         return;
