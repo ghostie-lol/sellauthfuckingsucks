@@ -81,7 +81,7 @@ client.on('interactionCreate', async (interaction: Interaction) => {
   } catch (error) {
     console.error('❌ Interaction handler error:', error);
     if (interaction.isRepliable()) {
-      const payload = { content: '❌ Something went wrong while handling that interaction. Check the bot permissions and server setup, then try again.', flags: MessageFlags.Ephemeral };
+      const payload = { content: '❌ Something went wrong while handling that interaction. Check the bot permissions and server setup, then try again.', flags: MessageFlags.Ephemeral as const };
       if (interaction.deferred || interaction.replied) {
         await interaction.followUp(payload).catch(() => undefined);
       } else {
