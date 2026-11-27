@@ -1,7 +1,8 @@
 import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { config } from './config.js';
 
-const commands = [\n
+const commands = [
+
   new SlashCommandBuilder()
     .setName('server-config')
     .setDescription('Configure this server without environment variables')
