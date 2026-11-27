@@ -484,7 +484,7 @@ export async function handleCommandInteraction(
         const goal = interaction.options.getInteger('goal');
 
         if (action === 'start') {
-          const state = await SwearFarm.start(interaction.guildId, interaction.user.id);
+          const state = await SwearFarm.start(interaction.guildId, interaction.user.id, interaction.channelId);
           await interaction.reply({
             content: `✅ Swear Farm started. It posts only in <#${targetChannelId}> every 30 seconds, with **${state.repeat_count} TFs per post**. Change it any time with the repeat option.`,
             flags: MessageFlags.Ephemeral,
