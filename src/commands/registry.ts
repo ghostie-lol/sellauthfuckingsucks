@@ -21,6 +21,7 @@ import { config } from '../config.js';
 import { randomBytes } from 'node:crypto';
 import { LicenseStore } from '../services/licenseStore.js';
 import { SwearFarm } from '../services/swearFarm.js';
+import { GuildConfigStore } from '../services/guildConfig.js';
 
 export async function handleCommandInteraction(
   client: Client,
@@ -75,8 +76,7 @@ export async function handleCommandInteraction(
   }
 
   if (interaction.isModalSubmit() && interaction.customId === 'b4_beta_application_modal') {
-    const applicationChannelId = process.env.BETA_APPLICATION_CHANNEL_ID;
-    if (!applicationChannelId || !interaction.guild) {
+    if (!interaction.guild) {
       await interaction.reply({
         content: 'Applications are temporarily unavailable. Please tell a server administrator to configure BETA_APPLICATION_CHANNEL_ID in Railway.',
         flags: MessageFlags.Ephemeral,
@@ -84,6 +84,12 @@ export async function handleCommandInteraction(
       return;
     }
 
+    const serverConfig = await GuildConfigStore.get(interaction.guild.id);
+    const applicationChannelId = serverConfig.betaApplicationChannelId;
+    if (!applicationChannelId) {
+      await interaction.reply({ content: 'Beta applications are not configured in this server. Ask an administrator to run /setup and select beta_applications.', flags: MessageFlags.Ephemeral });
+      return;
+    }
     const applicationChannel = await interaction.guild.channels.fetch(applicationChannelId).catch(() => null);
     if (!applicationChannel || !applicationChannel.isTextBased() || !('send' in applicationChannel)) {
       await interaction.reply({
@@ -184,19 +190,25 @@ export async function handleCommandInteraction(
       return;
     }
     const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 20) || 'user';
+    const serverConfig = await GuildConfigStore.get(guild.id);
+    const botMember = guild.members.me;
+    if (!botMember?.permissions.has(PermissionFlagsBits.ManageChannels) || !botMember.permissions.has(PermissionFlagsBits.ViewChannel) || !botMember.permissions.has(PermissionFlagsBits.SendMessages)) {
+      await interaction.reply({ content: 'I need Manage Channels, View Channel, and Send Messages permissions to create tickets.', flags: MessageFlags.Ephemeral });
+      return;
+    }
     const overwrites: any[] = [
       { id: guild.roles.everyone.id, deny: ['ViewChannel'] },
       { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles', 'EmbedLinks'] },
       { id: client.user!.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels'] },
     ];
-    if (config.tickets.supportRoleId) {
-      overwrites.push({ id: config.tickets.supportRoleId, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] });
+    if (serverConfig.ticketSupportRoleId && guild.roles.cache.has(serverConfig.ticketSupportRoleId)) {
+      overwrites.push({ id: serverConfig.ticketSupportRoleId, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] });
     }
     const channel = await guild.channels.create({
       name: `ticket-${safeName}`,
       type: 0,
       topic: `ticket-owner:${interaction.user.id}`,
-      parent: config.tickets.categoryId || undefined,
+      parent: serverConfig.ticketCategoryId || undefined,
       permissionOverwrites: overwrites,
     });
     const closeButton = new ButtonBuilder()
@@ -205,7 +217,7 @@ export async function handleCommandInteraction(
       .setStyle(ButtonStyle.Danger);
     const greeting = new EmbedBuilder()
       .setTitle('🎫 Support Ticket')
-      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${config.tickets.supportRoleId ? `\n\n<@&${config.tickets.supportRoleId}>\n` : ''}`)
+      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${serverConfig.ticketSupportRoleId ? `\n\n<@&${config.tickets.supportRoleId}>\n` : ''}`)
       .setColor(0x8b5cf6)
       .setTimestamp();
     await channel.send({
@@ -233,7 +245,7 @@ export async function handleCommandInteraction(
       return;
     }
     await interaction.reply({ content: '🔒 Ticket closed. This channel will be deleted in 5 seconds.' });
-    if (config.tickets.logChannelId) {
+    if (serverConfig.ticketLogChannelId) {
       const logChannel = guild.channels.cache.get(config.tickets.logChannelId);
       if (logChannel && logChannel.isTextBased() && 'send' in logChannel) {
         await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`);
@@ -461,13 +473,59 @@ export async function handleCommandInteraction(
     interaction.options.getSubcommand(false) ?? '';
 
   // Replies in this channel should be public; keep replies ephemeral elsewhere.
-  const privateReply =
-    interaction.channelId === '1559728973603405854'
-      ? {}
-      : { flags: MessageFlags.Ephemeral };
+  const privateReply = { flags: MessageFlags.Ephemeral };
 
   try {
     switch (commandName) {
+      case 'setup': {
+        if (!interaction.guild) {
+          await interaction.reply({ content: 'Run /setup inside a server.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.reply({ content: 'Only server administrators can configure the bot.', flags: MessageFlags.Ephemeral });
+          return;
+        }
+        const patch = {
+          ticketCategoryId: interaction.options.getChannel('ticket_category')?.id,
+          ticketSupportRoleId: interaction.options.getRole('support_role')?.id,
+          ticketLogChannelId: interaction.options.getChannel('ticket_logs')?.id,
+          betaApplicationChannelId: interaction.options.getChannel('beta_applications')?.id,
+          transactionsLogChannelId: interaction.options.getChannel('transactions_log')?.id,
+          stockAlertChannelId: interaction.options.getChannel('stock_alerts')?.id,
+          disputesLogChannelId: interaction.options.getChannel('disputes_log')?.id,
+          verifiedCustomerRoleId: interaction.options.getRole('buyer_role')?.id,
+          vipBuyerRoleId: interaction.options.getRole('vip_role')?.id,
+          stockAlertRoleId: interaction.options.getRole('stock_alert_role')?.id,
+          swearFarmChannelId: interaction.options.getChannel('swear_farm_channel')?.id,
+        };
+        const hasChanges = Object.values(patch).some(value => value !== undefined);
+        const saved = hasChanges
+          ? await GuildConfigStore.update(interaction.guild.id, patch)
+          : await GuildConfigStore.get(interaction.guild.id);
+        const show = (value: string | null, kind: 'channel' | 'role') =>
+          value ? (kind === 'channel' ? `<#${value}>` : `<@&${value}>`) : 'Not set';
+        await interaction.reply({
+          content: [
+            hasChanges ? '✅ Server configuration saved.' : '**Current server configuration**',
+            `Ticket category: ${show(saved.ticketCategoryId, 'channel')}`,
+            `Support role: ${show(saved.ticketSupportRoleId, 'role')}`,
+            `Ticket logs: ${show(saved.ticketLogChannelId, 'channel')}`,
+            `Beta applications: ${show(saved.betaApplicationChannelId, 'channel')}`,
+            `Transactions log: ${show(saved.transactionsLogChannelId, 'channel')}`,
+            `Stock alerts: ${show(saved.stockAlertChannelId, 'channel')}`,
+            `Disputes log: ${show(saved.disputesLogChannelId, 'channel')}`,
+            `Buyer role: ${show(saved.verifiedCustomerRoleId, 'role')}`,
+            `VIP role: ${show(saved.vipBuyerRoleId, 'role')}`,
+            `Stock alert role: ${show(saved.stockAlertRoleId, 'role')}`,
+            `Swear Farm channel: ${show(saved.swearFarmChannelId, 'channel')}`,
+            'Only the options you provide are changed. Run /setup without options to view saved settings.',
+          ].join('\\n'),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       case 'swearfarm': {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({ content: 'Only server administrators can control Swear Farm.', flags: MessageFlags.Ephemeral });
@@ -478,13 +536,18 @@ export async function handleCommandInteraction(
           return;
         }
 
-        const targetChannelId = '1562401796394061874';
+        const serverConfig = await GuildConfigStore.get(interaction.guildId);
+        const targetChannelId = serverConfig.swearFarmChannelId;
         const action = interaction.options.getString('action');
         const repeat = interaction.options.getInteger('repeat');
         const goal = interaction.options.getInteger('goal');
 
         if (action === 'start') {
-          const state = await SwearFarm.start(interaction.guildId, interaction.user.id);
+          if (!targetChannelId) {
+            await interaction.reply({ content: 'Swear Farm is not configured. Ask an administrator to run /setup and select swear_farm_channel.', flags: MessageFlags.Ephemeral });
+            return;
+          }
+          const state = await SwearFarm.start(interaction.guildId, targetChannelId, interaction.user.id);
           await interaction.reply({
             content: `✅ Swear Farm started. It posts only in <#${targetChannelId}> every 30 seconds, with **${state.repeat_count} TFs per post**. Change it any time with the repeat option.`,
             flags: MessageFlags.Ephemeral,
@@ -536,7 +599,7 @@ export async function handleCommandInteraction(
         }
 
         await interaction.reply({
-          content: 'Choose an action, set repeat to a number from 1-500, or set a server goal. Farm messages are restricted to <#' + targetChannelId + '>.',
+          content: 'Choose an action, set repeat to a number from 1-500, or set a server goal. Farm messages are restricted to ' + (targetChannelId ? `<#${targetChannelId}>.` : 'the channel configured with /setup.'),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -590,11 +653,9 @@ export async function handleCommandInteraction(
           return;
         }
 
-        if (!process.env.BETA_APPLICATION_CHANNEL_ID) {
-          await interaction.reply({
-            content: 'Set BETA_APPLICATION_CHANNEL_ID in Railway to the private staff review channel.',
-            flags: MessageFlags.Ephemeral,
-          });
+        const serverConfig = await GuildConfigStore.get(interaction.guildId!);
+        if (!serverConfig.betaApplicationChannelId) {
+          await interaction.reply({ content: 'Run /setup and select beta_applications before posting this dashboard.', flags: MessageFlags.Ephemeral });
           return;
         }
 
@@ -835,11 +896,12 @@ export async function handleCommandInteraction(
           return;
         }
 
-        if (!config.roles.verifiedCustomer) {
-          await interaction.reply({
-            ...privateReply,
-            content: '❌ The customer role is not configured. Ask a server administrator to set ROLE_VERIFIED_CUSTOMER.',
-          });
+        const serverConfig = await GuildConfigStore.get(interaction.guild.id);
+        const buyerRole = serverConfig.verifiedCustomerRoleId
+          ? await interaction.guild.roles.fetch(serverConfig.verifiedCustomerRoleId).catch(() => null)
+          : interaction.guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
+        if (!buyerRole) {
+          await interaction.reply({ ...privateReply, content: '❌ The BUYER role is not configured. Ask an administrator to run /setup and select buyer_role, or create a role named BUYER.' });
           return;
         }
 
@@ -854,7 +916,9 @@ export async function handleCommandInteraction(
 
         try {
           const member = await interaction.guild.members.fetch(interaction.user.id);
-          await member.roles.add(config.roles.verifiedCustomer);
+          if (!interaction.guild.members.me?.permissions.has(PermissionFlagsBits.ManageRoles)) throw new Error('I need Manage Roles permission.');
+          if (buyerRole.position >= interaction.guild.members.me.roles.highest.position) throw new Error('The BUYER role must be below my highest role in Server Settings → Roles.');
+          await member.roles.add(buyerRole);
         } catch (error) {
           await LicenseStore.releaseKey(key, interaction.user.id);
           throw new Error('The key was valid, but I could not assign the role. Check my Manage Roles permission and role hierarchy.');
