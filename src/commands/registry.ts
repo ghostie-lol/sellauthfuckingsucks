@@ -75,19 +75,17 @@ export async function handleCommandInteraction(
   }
 
   if (interaction.isModalSubmit() && interaction.customId === 'b4_beta_application_modal') {
-    const applicationChannelId = process.env.BETA_APPLICATION_CHANNEL_ID;
-    if (!applicationChannelId || !interaction.guild) {
-      await interaction.reply({
-        content: 'Applications are only available inside a server.',
-        flags: MessageFlags.Ephemeral,
-      });
+    if (!interaction.guild) {
+      await interaction.reply({ content: 'Applications are only available inside a server.', flags: MessageFlags.Ephemeral });
       return;
     }
-
-    const settings = await getGuildSettings(interaction.guild.id);\n    const applicationChannel = settings.beta_applications_channel_id\n      ? await interaction.guild.channels.fetch(settings.beta_applications_channel_id).catch(() => null)\n      : null;
+    const settings = await getGuildSettings(interaction.guild.id);
+    const applicationChannel = settings.beta_applications_channel_id
+      ? await interaction.guild.channels.fetch(settings.beta_applications_channel_id).catch(() => null)
+      : null;
     if (!applicationChannel || !applicationChannel.isTextBased() || !('send' in applicationChannel)) {
       await interaction.reply({
-        content: 'The beta application inbox is not configured correctly. Please contact a server administrator.',
+        content: 'The beta application inbox is not configured. Ask an administrator to set it with /server-config channel.',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -176,25 +174,27 @@ export async function handleCommandInteraction(
       await interaction.reply({ content: 'Tickets can only be opened inside the server.', flags: MessageFlags.Ephemeral });
       return;
     }
+    const settings = await getGuildSettings(guild.id);
     const existing = guild.channels.cache.find((channel: any) =>
-      channel.type === 0 && channel.topic?.includes(`ticket-owner:${interaction.user.id}`)
+      channel.type === ChannelType.GuildText && channel.topic?.includes(`ticket-owner:${interaction.user.id}`)
     );
     if (existing) {
       await interaction.reply({ content: `You already have an open ticket: <#${existing.id}>`, flags: MessageFlags.Ephemeral });
       return;
     }
     const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 20) || 'user';
+    const supportRoleId = settings.ticket_support_role_id;
     const overwrites: any[] = [
       { id: guild.roles.everyone.id, deny: ['ViewChannel'] },
       { id: interaction.user.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles', 'EmbedLinks'] },
       { id: client.user!.id, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageChannels'] },
     ];
-    if (config.tickets.supportRoleId) {
-      overwrites.push({ id: config.tickets.supportRoleId, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] });
+    if (supportRoleId) {
+      overwrites.push({ id: supportRoleId, allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'] });
     }
     const channel = await guild.channels.create({
       name: `ticket-${safeName}`,
-      type: 0,
+      type: ChannelType.GuildText,
       topic: `ticket-owner:${interaction.user.id}`,
       parent: settings.ticket_category_id || undefined,
       permissionOverwrites: overwrites,
@@ -204,8 +204,8 @@ export async function handleCommandInteraction(
       .setLabel('Close Ticket')
       .setStyle(ButtonStyle.Danger);
     const greeting = new EmbedBuilder()
-      .setTitle('🎫 Support Ticket')
-      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${config.tickets.supportRoleId ? `\n\n<@&${config.tickets.supportRoleId}>\n` : ''}`)
+      .setTitle('Support Ticket')
+      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${supportRoleId ? `\n\n<@&${supportRoleId}>\n` : ''}`)
       .setColor(0x8b5cf6)
       .setTimestamp();
     await channel.send({
@@ -213,7 +213,7 @@ export async function handleCommandInteraction(
       components: [new ActionRowBuilder<ButtonBuilder>().addComponents(closeButton)],
       allowedMentions: { users: [interaction.user.id], roles: supportRoleId ? [supportRoleId] : [] },
     });
-    await interaction.reply({ content: `✅ Your ticket is ready: <#${channel.id}>`, flags: MessageFlags.Ephemeral });
+    await interaction.reply({ content: `Your ticket is ready: <#${channel.id}>`, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -224,19 +224,20 @@ export async function handleCommandInteraction(
       await interaction.reply({ content: 'This is not a recognized ticket channel.', flags: MessageFlags.Ephemeral });
       return;
     }
+    const settings = await getGuildSettings(guild.id);
     const ownerId = channel.topic.slice('ticket-owner:'.length);
     const isOwner = interaction.user.id === ownerId;
     const isAdmin = Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
-    const settings = await getGuildSettings(guild.id);\n    const hasSupportRole = Boolean(settings.ticket_support_role_id && interaction.member?.roles?.cache?.has(settings.ticket_support_role_id));
+    const hasSupportRole = Boolean(settings.ticket_support_role_id && interaction.member?.roles?.cache?.has(settings.ticket_support_role_id));
     if (!isOwner && !isAdmin && !hasSupportRole) {
       await interaction.reply({ content: 'Only the ticket creator, support staff, or an administrator can close this ticket.', flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.reply({ content: '🔒 Ticket closed. This channel will be deleted in 5 seconds.' });
-    if (config.tickets.logChannelId) {
-      const logChannel = guild.channels.cache.get(config.tickets.logChannelId);
-      if (logChannel && logChannel.isTextBased() && 'send' in logChannel) {
-        await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`);
+    await interaction.reply({ content: 'Ticket closed. This channel will be deleted in 5 seconds.' });
+    if (settings.ticket_log_channel_id) {
+      const logChannel = await guild.channels.fetch(settings.ticket_log_channel_id).catch(() => null);
+      if (logChannel?.isTextBased() && 'send' in logChannel) {
+        await logChannel.send(`Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`);
       }
     }
     setTimeout(() => { void channel.delete('Ticket closed').catch(console.error); }, 5000);
@@ -617,13 +618,11 @@ export async function handleCommandInteraction(
           return;
         }
 
-        if (!process.env.BETA_APPLICATION_CHANNEL_ID) {
-          await interaction.reply({
-            content: 'Set BETA_APPLICATION_CHANNEL_ID in Railway to the private staff review channel.',
-            flags: MessageFlags.Ephemeral,
-          });
+        if (!interaction.guild || !interaction.channelId) {
+          await interaction.reply({ content: 'Use this command inside a server channel.', flags: MessageFlags.Ephemeral });
           return;
         }
+        await setGuildSetting(interaction.guild.id, 'beta_applications_channel_id', interaction.channelId);
 
         const embed = new EmbedBuilder()
           .setTitle('🧪 B4 Redeemer Beta Tester Program')
@@ -862,11 +861,12 @@ export async function handleCommandInteraction(
           return;
         }
 
-        if (!config.roles.verifiedCustomer) {
-          await interaction.reply({
-            ...privateReply,
-            content: '❌ The customer role is not configured. Ask a server administrator to set ROLE_VERIFIED_CUSTOMER.',
-          });
+        const settings = await getGuildSettings(interaction.guild.id);
+        const buyerRole = settings.buyer_role_id
+          ? await interaction.guild.roles.fetch(settings.buyer_role_id).catch(() => null)
+          : interaction.guild.roles.cache.find(role => role.name.toUpperCase() === 'BUYER') ?? null;
+        if (!buyerRole) {
+          await interaction.reply({ ...privateReply, content: 'No BUYER role found. Create a role named BUYER or configure it with /server-config role.' });
           return;
         }
 
