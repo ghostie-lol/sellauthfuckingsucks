@@ -70,12 +70,16 @@ export class StockMonitor {
             )
             .setTimestamp();
           const ping = serverConfig.stockAlertRoleId ? '<@&' + serverConfig.stockAlertRoleId + '> ' : '';
-          await channel.send({
-            content: ping,
-            embeds: [embed],
-            allowedMentions: { roles: serverConfig.stockAlertRoleId ? [serverConfig.stockAlertRoleId] : [] },
-          });
-          this.alertCooldowns.add(cooldownKey);
+          try {
+            await channel.send({
+              content: ping,
+              embeds: [embed],
+              allowedMentions: { roles: serverConfig.stockAlertRoleId ? [serverConfig.stockAlertRoleId] : [] },
+            });
+            this.alertCooldowns.add(cooldownKey);
+          } catch (sendError) {
+            console.error('[StockMonitor] Could not send alert in guild ' + guild.id + '. Check Send Messages and Embed Links permissions.', sendError);
+          }
         }
       }
     } catch (err) {
