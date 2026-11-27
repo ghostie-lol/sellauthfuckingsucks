@@ -217,13 +217,13 @@ export async function handleCommandInteraction(
       .setStyle(ButtonStyle.Danger);
     const greeting = new EmbedBuilder()
       .setTitle('🎫 Support Ticket')
-      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${serverConfig.ticketSupportRoleId ? `\n\n<@&${config.tickets.supportRoleId}>\n` : ''}`)
+      .setDescription(`Welcome <@${interaction.user.id}>! Describe your issue and a staff member will help you.${serverConfig.ticketSupportRoleId ? `\n\n<@&${serverConfig.ticketSupportRoleId}>\n` : ''}`)
       .setColor(0x8b5cf6)
       .setTimestamp();
     await channel.send({
       embeds: [greeting],
       components: [new ActionRowBuilder<ButtonBuilder>().addComponents(closeButton)],
-      allowedMentions: { users: [interaction.user.id], roles: config.tickets.supportRoleId ? [config.tickets.supportRoleId] : [] },
+      allowedMentions: { users: [interaction.user.id], roles: serverConfig.ticketSupportRoleId ? [serverConfig.ticketSupportRoleId] : [] },
     });
     await interaction.reply({ content: `✅ Your ticket is ready: <#${channel.id}>`, flags: MessageFlags.Ephemeral });
     return;
@@ -239,14 +239,14 @@ export async function handleCommandInteraction(
     const ownerId = channel.topic.slice('ticket-owner:'.length);
     const isOwner = interaction.user.id === ownerId;
     const isAdmin = Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.Administrator));
-    const hasSupportRole = Boolean(config.tickets.supportRoleId && interaction.member?.roles?.cache?.has(config.tickets.supportRoleId));
+    const hasSupportRole = Boolean(serverConfig.ticketSupportRoleId && interaction.member?.roles?.cache?.has(serverConfig.ticketSupportRoleId));
     if (!isOwner && !isAdmin && !hasSupportRole) {
       await interaction.reply({ content: 'Only the ticket creator, support staff, or an administrator can close this ticket.', flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.reply({ content: '🔒 Ticket closed. This channel will be deleted in 5 seconds.' });
     if (serverConfig.ticketLogChannelId) {
-      const logChannel = guild.channels.cache.get(config.tickets.logChannelId);
+      const logChannel = await guild.channels.fetch(serverConfig.ticketLogChannelId).catch(() => null);
       if (logChannel && logChannel.isTextBased() && 'send' in logChannel) {
         await logChannel.send(`🔒 Ticket <#${channel.id}> closed by <@${interaction.user.id}> (owner <@${ownerId}>).`);
       }
