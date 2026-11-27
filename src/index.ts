@@ -10,12 +10,12 @@ import { registerCommands } from './deployCommands.js';
 import { handleCommandInteraction } from './commands/registry.js';
 import { StockMonitor } from './services/stockMonitor.js';
 import { SwearFarm } from './services/swearFarm.js';
+import { GuildConfigStore } from './services/guildConfig.js';
 
 export const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
   partials: [
@@ -42,12 +42,18 @@ client.user?.setPresence({
   );
 
   console.log(
-    `📊 Connected to Guild: ${config.discord.guildId}`
+    `📊 Connected to ${client.guilds.cache.size} Discord server(s)`
   );
 
   client.user?.setActivity('redeeming keys in b4 mods', {
     type: 0,
   });
+
+  try {
+    await GuildConfigStore.importLegacyEnvironment(config.discord.guildId);
+  } catch (error) {
+    console.error('⚠️ Could not import legacy single-server settings:', error);
+  }
 
   try {
     await registerCommands();
@@ -171,6 +177,12 @@ Behavior:
     }).catch(console.error);
   }
 });
+
+const requiredEnvironment = ['DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_ID', 'SELLAUTH_API_KEY', 'SELLAUTH_SHOP_ID', 'DATABASE_URL'];
+const missingEnvironment = requiredEnvironment.filter(name => !process.env[name]?.trim());
+if (missingEnvironment.length) {
+  throw new Error('Missing required environment variables: ' + missingEnvironment.join(', '));
+}
 
 client.login(config.discord.token).catch((error) => {
   console.error('❌ Failed to log in to Discord:', error);
